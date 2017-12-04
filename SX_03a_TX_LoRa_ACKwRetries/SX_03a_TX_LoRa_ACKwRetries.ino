@@ -60,7 +60,7 @@ void setup()
   Serial.println(e, DEC);
   
   // Select frequency channel
-  e |= sx1272.setChannel(CH_10_868);
+  e |= sx1272.setChannel(CH_04_900);
   Serial.print(F("Setting Channel: state "));
   Serial.println(e, DEC);
   
@@ -96,7 +96,7 @@ void loop(void)
   delay(4000);  
 
   // Send message2 broadcast and print the result
-  e = sx1272.sendPacketTimeoutACKRetries(0, message2);
+  e = sx1272.sendPacketTimeoutACKRetries(8, message2);
   Serial.print(F("Packet sent, state "));
   Serial.println(e, DEC);
 
