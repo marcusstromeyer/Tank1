@@ -30,6 +30,18 @@
 // Include the SX1272 and SPI library:
 #include "arduinoLoRa.h"
 #include <SPI.h>
+#include <RTCZero.h>
+
+/* Create an rtc object */
+RTCZero rtc;
+
+// Set up timer 
+const byte alarmSeconds = 10;
+const byte alarmMinutes = 0;
+const byte alarmHours = 0;
+
+
+volatile bool alarmFlag = true; // Start awake
 
 int e;
 
@@ -38,11 +50,20 @@ char message2 [] = "Packet 2, broadcast test";
 
 void setup()
 {
-  delay(2000);
+  delay(5000);
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   pinMode(CS,OUTPUT);
   digitalWrite(CS,HIGH);
+
+  // Set up the real time clock 
+  rtc.begin(); // Set up clocks and such
+  rtc.attachInterrupt(alarmMatch); // Set up a handler for the alarm
+
+  // Set up LEDs to track sleep mode
+  pinMode(LED_BUILTIN, OUTPUT); //set LED pin to output
+  digitalWrite(LED_BUILTIN, LOW); //turn LED off
+  
   // Print a start message
   Serial.println(F("SX1272 module and Arduino: send packets with ACK"));
   
@@ -90,18 +111,62 @@ void setup()
 
 void loop(void)
 {
-  // Send message1 and print the result
-  e = sx1272.sendPacketTimeoutACK(8, message1);
-  Serial.print(F("Packet sent, state "));
-  Serial.println(e, DEC);
+  if (alarmFlag == true) {
 
-  delay(4000);  
+      alarmFlag = false;  // Clear flag
+      
+      // Send message1 and print the result
+      e = sx1272.sendPacketTimeoutACK(8, message1);
+      Serial.print(F("Packet sent, state "));
+      Serial.println(e, DEC);
+    
+      delay(500);  
+    
+      // Send message2 broadcast and print the result
+      e = sx1272.sendPacketTimeoutACK(0, message2);
+      Serial.print(F("Packet sent, state "));
+      Serial.println(e, DEC);
+    
+      delay(500);  
+  }
 
-  // Send message2 broadcast and print the result
-  e = sx1272.sendPacketTimeoutACK(0, message2);
-  Serial.print(F("Packet sent, state "));
-  Serial.println(e, DEC);
 
-  delay(4000);  
+  resetAlarm();  // Reset alarm before returning to sleep
+  Serial.println("Alarm set, going to sleep now.");
+
+  //puts SAMD21 to sleep
+  digitalWrite(LED_BUILTIN, LOW);
+  Serial.end();
+  rtc.standbyMode(); //library call
+
 }
+
+
+//interrupt service routine (ISR), called when interrupt is triggered 
+//executes after MCU wakes up
+void alarmMatch(void)
+{
+  Serial.begin(9600);
+  //delay(3000); // Wait for console
+  Serial.println("Woke up!");
+  digitalWrite(LED_BUILTIN, HIGH);
+  alarmFlag = true; 
+}
+
+// Resets the alarm
+void resetAlarm(void) {
+  byte seconds = 0;
+  byte minutes = 0;
+  byte hours = 0;
+  byte day = 1;
+  byte month = 1;
+  byte year = 1;
+  
+  rtc.setTime(hours, minutes, seconds);
+  rtc.setDate(day, month, year);
+
+  rtc.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
+  rtc.enableAlarm(rtc.MATCH_HHMMSS);
+}
+
 
