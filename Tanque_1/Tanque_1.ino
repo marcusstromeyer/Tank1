@@ -49,13 +49,14 @@ int e;
 char message1 [] = "Packet 1";
 char message2 [] = "Packet 2";
 
-void setup()
+void setup() 
 {
   
   delay(5000);
   
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
+  Serial.begin(9600);  // Open serial communications and wait for port to open:
+
+  // Setting pin to disable transmitter SPI connection until ready
   pinMode(CS,OUTPUT);
   digitalWrite(CS,HIGH);
 
