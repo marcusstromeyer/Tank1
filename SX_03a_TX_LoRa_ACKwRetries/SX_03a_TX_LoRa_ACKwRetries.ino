@@ -40,6 +40,8 @@ void setup()
 {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
+  pinMode(CS,OUTPUT);
+  digitalWrite(CS,HIGH);
   
   // Print a start message
   Serial.println(F("SX1272 module and Arduino: send packets with ACK and retries"));
