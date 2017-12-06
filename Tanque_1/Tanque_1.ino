@@ -1,36 +1,22 @@
 /*  
- *  LoRa 868 / 915MHz SX1272 LoRa module
+ *   
+ *  Authors: Marcus and Louis 
+ *  Description: Code for the tanque 1 
+ *  Includes sensing, smoothing, standby and tramsmition
  *  
- *  Copyright (C) Libelium Comunicaciones Distribuidas S.L. 
- *  http://www.libelium.com 
- *  
- *  This program is free software: you can redistribute it and/or modify 
- *  it under the terms of the GNU General Public License as published by 
- *  the Free Software Foundation, either version 3 of the License, or 
- *  (at your option) any later version. 
- *  
- *  This program is distributed in the hope that it will be useful, 
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of 
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
- *  GNU General Public License for more details.
- *  
- *  You should have received a copy of the GNU General Public License 
- *  along with this program.  If not, see http://www.gnu.org/licenses/. 
- *  
- *  Version:           1.2
- *  Design:            David Gascón
- *  Implementation:    Covadonga Albiñana, Victor Boria, Ruben Martin
  */
 
+// All the libraries we need 
 #include <Wire.h>
-
-// Cooking API libraries
-//include "arduinoUtils.h"
-
-// Include the SX1272 and SPI library:
-#include "arduinoLoRa.h"
 #include <SPI.h>
 #include <RTCZero.h>
+#include "arduinoLoRa.h"
+
+//include "arduinoUtils.h"
+
+// Pins for the sensor 
+#define trigPin 10
+#define echoPin 11
 
 // Create an rtc object 
 RTCZero rtc;
@@ -41,13 +27,16 @@ const byte timerMinutes = 0;
 const byte timerHours = 0;
 
 // This helps us figure out if the timer has gone off
-volatile bool timerFlag = true; // Start awake
+volatile bool timerFlag = true; 
 
+// If we don't want a timer, set to true
+const bool noTimer = true; 
+
+// Transmition object
 int e;
 
-// The messages we are sending 
-char message1 [] = "Packet 1";
-char message2 [] = "Packet 2";
+// Message header
+char messageHeader [] = "Data: ";
 
 void setup() 
 {
@@ -60,6 +49,10 @@ void setup()
   pinMode(CS,OUTPUT);
   digitalWrite(CS,HIGH);
 
+  // Define the inputs/outputs for distance sensor
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
   // Set up the real time clock 
   rtc.begin(); // Set up clocks and such
   rtc.attachInterrupt(timerMatch); // Set up a handler for the alarm
@@ -67,7 +60,70 @@ void setup()
   // Set up LEDs to track sleep mode
   pinMode(LED_BUILTIN, OUTPUT); //set LED pin to output
   digitalWrite(LED_BUILTIN, LOW); //turn LED off
+
+  setUpLora(); // Call function to set up the Lora
   
+}
+
+void loop(void)
+{
+
+  // Check if we are out of sleep 
+  if (timerFlag == true || noTimer == true) {
+
+      timerFlag = false;  // Clear flag
+
+      int distanceFromSensor = getDistanceFromSensor(); // We get distance from sensor
+      Serial.print("Distance from sensor: ");
+      Serial.println(distanceFromSensor);
+      // Put together char array to send
+      char distanceChar[16];
+      itoa(distanceFromSensor, distanceChar, 10);
+      Serial.print("Distance Char: ");
+      Serial.println(distanceChar);
+      char dataToSend[sizeof(messageHeader) + sizeof(distanceChar) + 1];
+      sprintf(dataToSend, "%s %s", messageHeader, distanceChar); // with word space
+
+      Serial.println(dataToSend);
+
+      // Send data 
+      e = sx1272.sendPacketTimeoutACKRetries(8, dataToSend);
+      Serial.print(F("Packet sent, state "));
+      Serial.println(e, DEC);
+
+      delay(500);  
+
+  }
+
+  if (noTimer!=true)
+  {
+
+    resetTimer();  // Reset alarm before returning to sleep
+  
+    Serial.println("Going to sleep now.");
+    digitalWrite(LED_BUILTIN, LOW);
+    
+    rtc.standbyMode(); //puts SAMD21 to sleep
+    
+  }
+
+}
+
+
+//interrupt service routine (ISR), called when interrupt is triggered 
+//executes after MCU wakes up
+void timerMatch(void)
+{
+  
+  Serial.begin(9600);
+  Serial.println("Woke up!");
+  digitalWrite(LED_BUILTIN, HIGH);
+  timerFlag = true; 
+  
+}
+
+void setUpLora(){
+
   // Print a start message
   Serial.println(F("SX1272 module and Arduino: send packets with ACK"));
   
@@ -111,51 +167,6 @@ void setup()
     Serial.println(F("SX1272 successfully configured"));
   else
     Serial.println(F("SX1272 initialization failed"));
-}
-
-void loop(void)
-{
-
-  // Check if we are out of sleep 
-  if (timerFlag == true) {
-
-      timerFlag = false;  // Clear flag
-      
-      // Send message1 and print the result
-      e = sx1272.sendPacketTimeoutACKRetries(8, message1);
-      Serial.print(F("Packet sent, state "));
-      Serial.println(e, DEC);
-    
-      delay(500);  
-    
-      // Send message2 broadcast and print the result
-      e = sx1272.sendPacketTimeoutACKRetries(8, message2);
-      Serial.print(F("Packet sent, state "));
-      Serial.println(e, DEC);
-    
-      delay(500);  
-  }
-
-
-  resetTimer();  // Reset alarm before returning to sleep
-  
-  Serial.println("Going to sleep now.");
-  digitalWrite(LED_BUILTIN, LOW);
-    
-  rtc.standbyMode(); //puts SAMD21 to sleep
-
-}
-
-
-//interrupt service routine (ISR), called when interrupt is triggered 
-//executes after MCU wakes up
-void timerMatch(void)
-{
-  
-  Serial.begin(9600);
-  Serial.println("Woke up!");
-  digitalWrite(LED_BUILTIN, HIGH);
-  timerFlag = true; 
   
 }
 
@@ -174,6 +185,38 @@ void resetTimer(void)
 
   rtc.setAlarmTime(timerHours, timerMinutes, timerSeconds);
   rtc.enableAlarm(rtc.MATCH_HHMMSS);
+}
+
+
+// Uses ultrasonic sensor to get distance
+int getDistanceFromSensor(){
+
+ long duration; 
+ int distance;
+ 
+  digitalWrite(trigPin, LOW); 
+  delayMicroseconds(2);
+ 
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  duration = pulseIn(echoPin, HIGH);
+
+  distance = (duration / 2) * 0.0344;
+  
+  if (distance >= 400 || distance <= 2){
+    Serial.print("Distance = ");
+    Serial.println(distance);
+  }
+  else {
+    Serial.print("Distance = ");
+    Serial.print(distance);
+    Serial.println(" cm ");
+  }
+
+  return distance; 
+  
 }
 
 
