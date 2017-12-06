@@ -7,7 +7,7 @@
 */
 // defines pins numbers
 const int trigPin = 9;
-const int echoPin = 10;
+const int echoPin = 10;//Do not use PIN 13 on Feather through logic shifter
 // defines variables
 long duration;
 int distance;

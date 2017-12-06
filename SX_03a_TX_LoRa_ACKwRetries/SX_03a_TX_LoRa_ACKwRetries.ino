@@ -40,6 +40,8 @@ void setup()
 {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
+  pinMode(CS,OUTPUT);
+  digitalWrite(CS,HIGH);
   
   // Print a start message
   Serial.println(F("SX1272 module and Arduino: send packets with ACK and retries"));
@@ -60,7 +62,7 @@ void setup()
   Serial.println(e, DEC);
   
   // Select frequency channel
-  e |= sx1272.setChannel(CH_10_868);
+  e |= sx1272.setChannel(CH_04_900);
   Serial.print(F("Setting Channel: state "));
   Serial.println(e, DEC);
   
@@ -96,7 +98,7 @@ void loop(void)
   delay(4000);  
 
   // Send message2 broadcast and print the result
-  e = sx1272.sendPacketTimeoutACKRetries(0, message2);
+  e = sx1272.sendPacketTimeoutACKRetries(8, message2);
   Serial.print(F("Packet sent, state "));
   Serial.println(e, DEC);
 
