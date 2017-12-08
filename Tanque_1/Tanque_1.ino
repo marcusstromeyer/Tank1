@@ -11,8 +11,7 @@
 #include <SPI.h>
 #include <RTCZero.h>
 #include "arduinoLoRa.h"
-
-//include "arduinoUtils.h"
+#include "RunningMedian.h"
 
 // Pins for the sensor 
 #define trigPin 10
@@ -30,13 +29,16 @@ const byte timerHours = 0;
 volatile bool timerFlag = true; 
 
 // If we don't want a timer, set to true
-const bool noTimer = true; 
+const bool noTimer = false; 
 
 // Transmition object
 int e;
 
 // Message header
 char messageHeader [] = "Data: ";
+
+// Object for RunningMedian 
+RunningMedian dataPoints = RunningMedian(20); 
 
 void setup() 
 {
@@ -73,7 +75,7 @@ void loop(void)
 
       timerFlag = false;  // Clear flag
 
-      int distanceFromSensor = getDistanceFromSensor(); // We get distance from sensor
+      int distanceFromSensor = getDistanceWithSmoothing(); // We get distance from sensor
       Serial.print("Distance from sensor: ");
       Serial.println(distanceFromSensor);
       // Put together char array to send
@@ -187,6 +189,53 @@ void resetTimer(void)
   rtc.enableAlarm(rtc.MATCH_HHMMSS);
 }
 
+// Gets data and applies smoothing algo
+int getDistanceWithSmoothing(){
+
+  dataPoints.clear();
+
+  int countWithoutZeros = 0; 
+  int countWithZeros = 0; 
+  int latestDataPoint;
+  
+  while (countWithoutZeros<10 && countWithZeros<30){
+
+    latestDataPoint = getDistanceFromSensor();
+//    Serial.print("Latest data point: ");
+//    Serial.println(latestDataPoint);
+
+    if (latestDataPoint==0)
+    { 
+
+       //Serial.print("Not adding data point - zero");
+       countWithZeros++; 
+      
+    }
+
+    else
+    {
+       
+      //Serial.println("Adding data point");
+      dataPoints.add(latestDataPoint); 
+      countWithoutZeros++;
+      countWithZeros++; 
+    
+    }
+
+
+  }
+
+  int median = dataPoints.getMedian();
+//  Serial.print("Size = ");
+//  Serial.println(dataPoints.getSize());
+//  Serial.print("Median = ");
+//  Serial.println(median);
+//  Serial.println("////////////////");
+  return median; 
+  
+
+
+}
 
 // Uses ultrasonic sensor to get distance
 int getDistanceFromSensor(){
@@ -205,18 +254,17 @@ int getDistanceFromSensor(){
 
   distance = (duration / 2) * 0.0344;
   
-  if (distance >= 400 || distance <= 2){
-    Serial.print("Distance = ");
-    Serial.println(distance);
-  }
-  else {
-    Serial.print("Distance = ");
-    Serial.print(distance);
-    Serial.println(" cm ");
-  }
+//  if (distance >= 400 || distance <= 2){
+//    Serial.print("Distance = ");
+//    Serial.println(distance);
+//  }
+//  else {
+//    Serial.print("Distance = ");
+//    Serial.print(distance);
+//    Serial.println(" cm ");
+//  }
 
   return distance; 
   
 }
-
 
