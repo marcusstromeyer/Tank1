@@ -25,7 +25,7 @@
 #include <Wire.h>
 
 // Cooking API libraries
-#include <arduinoUtils.h>
+//#include <arduinoUtils.h>
 
 // Include the SX1272 and SPI library:
 #include "arduinoLoRa.h"
@@ -38,6 +38,8 @@ char message2 [] = "Packet 2, broadcast test";
 
 void setup()
 {
+
+    Serial.print(F("Inside setup "));
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   pinMode(CS,OUTPUT);

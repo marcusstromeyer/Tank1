@@ -16,14 +16,19 @@
 // Pins for the sensor 
 #define trigPin 10
 #define echoPin 11
+#define turnOnSensorPin 6
 
 // Create an rtc object 
 RTCZero rtc;
 
-// Set up timer 
-const byte timerSeconds = 10;
-const byte timerMinutes = 0;
+// Set up timer for sleep 
+const byte timerSeconds = 0;
+const byte timerMinutes = 2;
 const byte timerHours = 0;
+
+// variables for system reset 
+const int resetAfterHowManyTransmitions = 24; 
+int numberOfTransmitions; 
 
 // This helps us figure out if the timer has gone off
 volatile bool timerFlag = true; 
@@ -54,6 +59,8 @@ void setup()
   // Define the inputs/outputs for distance sensor
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
+  pinMode(turnOnSensorPin, OUTPUT);
+  digitalWrite(turnOnSensorPin, LOW);
 
   // Set up the real time clock 
   rtc.begin(); // Set up clocks and such
@@ -61,7 +68,10 @@ void setup()
 
   // Set up LEDs to track sleep mode
   pinMode(LED_BUILTIN, OUTPUT); //set LED pin to output
-  digitalWrite(LED_BUILTIN, LOW); //turn LED off
+  digitalWrite(LED_BUILTIN, HIGH); //turn LED off
+
+  // Reset the counter on number of transmitions
+  numberOfTransmitions=0; 
 
   setUpLora(); // Call function to set up the Lora
   
@@ -78,6 +88,7 @@ void loop(void)
       int distanceFromSensor = getDistanceWithSmoothing(); // We get distance from sensor
       Serial.print("Distance from sensor: ");
       Serial.println(distanceFromSensor);
+      
       // Put together char array to send
       char distanceChar[16];
       itoa(distanceFromSensor, distanceChar, 10);
@@ -93,7 +104,9 @@ void loop(void)
       Serial.print(F("Packet sent, state "));
       Serial.println(e, DEC);
 
-      delay(500);  
+      numberOfTransmitions++; 
+
+      delay(5000);  
 
   }
 
@@ -121,6 +134,12 @@ void timerMatch(void)
   Serial.println("Woke up!");
   digitalWrite(LED_BUILTIN, HIGH);
   timerFlag = true; 
+
+  if(numberOfTransmitions>=resetAfterHowManyTransmitions)
+  {
+      NVIC_SystemReset();      // processor software reset
+  }
+  
   
 }
 
@@ -192,6 +211,9 @@ void resetTimer(void)
 // Gets data and applies smoothing algo
 int getDistanceWithSmoothing(){
 
+  Serial.println("Inside getDistanceWithSmoothing"); 
+  turnOnSensor(); 
+
   dataPoints.clear();
 
   int countWithoutZeros = 0; 
@@ -201,13 +223,10 @@ int getDistanceWithSmoothing(){
   while (countWithoutZeros<10 && countWithZeros<30){
 
     latestDataPoint = getDistanceFromSensor();
-//    Serial.print("Latest data point: ");
-//    Serial.println(latestDataPoint);
 
     if (latestDataPoint==0)
     { 
 
-       //Serial.print("Not adding data point - zero");
        countWithZeros++; 
       
     }
@@ -215,7 +234,6 @@ int getDistanceWithSmoothing(){
     else
     {
        
-      //Serial.println("Adding data point");
       dataPoints.add(latestDataPoint); 
       countWithoutZeros++;
       countWithZeros++; 
@@ -226,14 +244,8 @@ int getDistanceWithSmoothing(){
   }
 
   int median = dataPoints.getMedian();
-//  Serial.print("Size = ");
-//  Serial.println(dataPoints.getSize());
-//  Serial.print("Median = ");
-//  Serial.println(median);
-//  Serial.println("////////////////");
+  turnOffSensor(); 
   return median; 
-  
-
 
 }
 
@@ -254,17 +266,23 @@ int getDistanceFromSensor(){
 
   distance = (duration / 2) * 0.0344;
   
-//  if (distance >= 400 || distance <= 2){
-//    Serial.print("Distance = ");
-//    Serial.println(distance);
-//  }
-//  else {
-//    Serial.print("Distance = ");
-//    Serial.print(distance);
-//    Serial.println(" cm ");
-//  }
-
   return distance; 
   
 }
+
+void turnOnSensor()
+{
+    Serial.println("Turning on sensor"); 
+    digitalWrite(turnOnSensorPin, HIGH);
+    delay(100); 
+}
+
+void turnOffSensor()
+{
+    Serial.println("Turning off sensor"); 
+    digitalWrite(turnOnSensorPin, LOW);
+}
+
+
+
 
